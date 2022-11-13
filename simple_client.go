@@ -84,15 +84,10 @@ func (c *SimpleClient) Do(req *stdHTTP.Request, respBodyTarget any) (resp *stdHT
 	}
 
 	var (
-		retries         uint
-		timer           = time.NewTimer(0)
-		backoffStrategy backoff.Strategy
+		retries uint
+		// Don't wait at all before Doing the first request.
+		timer = time.NewTimer(0)
 	)
-
-	backoffStrategy = c.RequestRetryBackoffStrategy
-	if backoffStrategy == nil {
-		backoffStrategy = backoff.NewStrategyConstant(0)
-	}
 
 	for {
 
@@ -103,6 +98,8 @@ func (c *SimpleClient) Do(req *stdHTTP.Request, respBodyTarget any) (resp *stdHT
 		select {
 		case <-timer.C:
 		case <-ctx.Done():
+			// It's possible for the context to expire while waiting on the retry timer.
+			// If there is no error value (likely impossible) then use the context error value.
 			if err == nil {
 				err = ctx.Err()
 			}
@@ -115,13 +112,15 @@ func (c *SimpleClient) Do(req *stdHTTP.Request, respBodyTarget any) (resp *stdHT
 			break
 		}
 
+		// Error occurred so we need to retry using the defined strategy.
 		retries++
-		timer.Reset(backoffStrategy.IntervalForRetry(retries))
+		timer.Reset(c.RequestRetryBackoffStrategy.IntervalForRetry(retries))
 
 	}
 
 	defer resp.Body.Close()
 
+	// Don't decode if no decoder is provided.
 	if c.ResponseBodyDecoder == nil {
 		return
 	}
