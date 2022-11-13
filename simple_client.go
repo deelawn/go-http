@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	stdHTTP "net/http"
@@ -10,9 +11,14 @@ import (
 
 	"github.com/deelawn/go-http/client"
 	"github.com/deelawn/go-http/request"
+	"github.com/deelawn/go-http/request/retry/backoff"
 	"github.com/deelawn/go-http/response/body"
-	"github.com/deelawn/go-http/response/body/decoder"
 	"github.com/deelawn/go-http/response/body/json"
+)
+
+var ErrNilClientFields = errors.New(
+	"one or more of the required client fields is nil: Doer, BodyDecoder, Config.BackoffStrategy; " +
+		"consider using the client constructor",
 )
 
 type SimpleClient struct {
@@ -27,9 +33,18 @@ func NewSimpleClient(config client.Config) (*SimpleClient, error) {
 
 	var bodyDecoder body.Decoder
 	switch config.DecoderType {
-	case decoder.TypeJSON:
+	// JSON is the default for convenience. More decoder types will be added
+	// here as necessary.
+	default:
 		bodyDecoder = json.NewDecoder()
 	}
+
+	backoffStrategy := config.BackoffStrategy
+	if backoffStrategy == nil {
+		backoffStrategy = backoff.NewStrategyConstant(0)
+	}
+
+	config.BackoffStrategy = backoffStrategy
 
 	return &SimpleClient{
 		Doer:        new(stdHTTP.Client),
@@ -53,10 +68,22 @@ func (c *SimpleClient) Do(req *stdHTTP.Request, respBodyTarget any) (resp *stdHT
 		return nil, request.ErrorNoContextDeadline
 	}
 
+	// There will be no problem if the constructor is used, but there could be otherwise. Do this
+	// to avoid panics due to nil pointer references.
+	if c.Doer == nil || c.BodyDecoder == nil || c.Config.BackoffStrategy == nil {
+		return nil, ErrNilClientFields
+	}
+
 	var (
-		retries uint
-		timer   = time.NewTimer(0)
+		retries         uint
+		timer           = time.NewTimer(0)
+		backoffStrategy backoff.Strategy
 	)
+
+	backoffStrategy = c.Config.BackoffStrategy
+	if backoffStrategy == nil {
+		backoffStrategy = backoff.NewStrategyConstant(0)
+	}
 
 	for {
 
@@ -80,7 +107,7 @@ func (c *SimpleClient) Do(req *stdHTTP.Request, respBodyTarget any) (resp *stdHT
 		}
 
 		retries++
-		timer.Reset(c.Config.BackoffStrategy.IntervalForRetry(retries))
+		timer.Reset(backoffStrategy.IntervalForRetry(retries))
 
 	}
 
