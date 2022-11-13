@@ -5,10 +5,10 @@ import (
 	"errors"
 )
 
-var (
-	ErrorNoContextDeadline = errors.New("HTTP request is missing context deadline")
-)
+// ErrorNoContextDeadline is returned if a context is provided that doesn't have a deadline set.
+var ErrorNoContextDeadline = errors.New("HTTP request is missing context deadline")
 
+// ContextHasDeadline returns true if the provided context has a deadline set.
 func ContextHasDeadline(ctx context.Context) bool {
 
 	if ctx == nil {

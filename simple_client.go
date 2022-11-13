@@ -21,6 +21,10 @@ var ErrNilClientFields = errors.New(
 		"consider using the client constructor",
 )
 
+// SimpleClient is an HTTP client with response decoding and request retries baked in. It is
+// highly encouraged that instances of SimpleClient be initialized using the NewSimpleClient
+// constructor, as this will ensure that any required values not included in the Config
+// are assigned to their default values.
 type SimpleClient struct {
 	RequestDoer                 request.Doer
 	ResponseBodyDecoder         body.Decoder
@@ -30,6 +34,8 @@ type SimpleClient struct {
 	requestBuilder request.Builder
 }
 
+// NewSimpleClient returns an instance of SimpleClient initialized from the provided Config or
+// from defaults if required Config values are not provided.
 func NewSimpleClient(config client.Config) *SimpleClient {
 
 	simpleClient := SimpleClient{
@@ -54,6 +60,8 @@ func NewSimpleClient(config client.Config) *SimpleClient {
 	return &simpleClient
 }
 
+// Do does an HTTP request using the defined retry strategy in the event of failures. It handles reading the
+// response body and uses the defined decoder to decode it to the provided respBodyTarget.
 func (c *SimpleClient) Do(req *stdHTTP.Request, respBodyTarget any) (resp *stdHTTP.Response, err error) {
 
 	// Avoid nil pointer errors. There is no context set so it will end up returning a
@@ -125,6 +133,7 @@ func (c *SimpleClient) Do(req *stdHTTP.Request, respBodyTarget any) (resp *stdHT
 	return
 }
 
+// Get wraps Do by building the HTTP GET request. This is to achieve stdlib/net/http.Client feature parity.
 func (c *SimpleClient) Get(ctx context.Context, url string, respBodyTarget any) (*stdHTTP.Response, error) {
 
 	req, err := c.requestBuilder.BuildGetRequest(ctx, url)
@@ -135,6 +144,7 @@ func (c *SimpleClient) Get(ctx context.Context, url string, respBodyTarget any) 
 	return c.Do(req, respBodyTarget)
 }
 
+// Head wraps Do by building the HTTP HEAD request. This is to achieve stdlib/net/http.Client feature parity.
 func (c *SimpleClient) Head(ctx context.Context, url string, respBodyTarget any) (*stdHTTP.Response, error) {
 
 	req, err := c.requestBuilder.BuildHeadRequest(ctx, url)
@@ -145,6 +155,7 @@ func (c *SimpleClient) Head(ctx context.Context, url string, respBodyTarget any)
 	return c.Do(req, respBodyTarget)
 }
 
+// Post wraps Do by building the HTTP POST request. This is to achieve stdlib/net/http.Client feature parity.
 func (c *SimpleClient) Post(
 	ctx context.Context,
 	url string,
@@ -161,6 +172,7 @@ func (c *SimpleClient) Post(
 	return c.Do(req, respBodyTarget)
 }
 
+// PostForm wraps Do by building the HTTP POST request. This is to achieve stdlib/net/http.Client feature parity.
 func (c *SimpleClient) PostForm(
 	ctx context.Context,
 	url string,
