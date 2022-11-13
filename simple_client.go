@@ -8,11 +8,11 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/deelawn/go-http/body"
-	"github.com/deelawn/go-http/body/decoder"
-	"github.com/deelawn/go-http/body/json"
 	"github.com/deelawn/go-http/client"
 	"github.com/deelawn/go-http/request"
+	"github.com/deelawn/go-http/response/body"
+	"github.com/deelawn/go-http/response/body/decoder"
+	"github.com/deelawn/go-http/response/body/json"
 )
 
 type SimpleClient struct {
@@ -80,7 +80,7 @@ func (c *SimpleClient) Do(req *stdHTTP.Request, respBodyTarget any) (resp *stdHT
 		}
 
 		retries++
-		timer.Reset(c.Config.RetryFrequency)
+		timer.Reset(c.Config.BackoffStrategy.IntervalForRetry(retries))
 
 	}
 
