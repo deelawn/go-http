@@ -7,10 +7,6 @@ import (
 
 type Decoder struct{}
 
-func NewDecoder() *Decoder {
-	return &Decoder{}
-}
-
 func (d Decoder) Decode(source io.Reader, target any) error {
 
 	jsonDecoder := stdJSON.NewDecoder(source)

@@ -17,40 +17,41 @@ import (
 )
 
 var ErrNilClientFields = errors.New(
-	"one or more of the required client fields is nil: Doer, BodyDecoder, Config.BackoffStrategy; " +
+	"one or more of the required client fields is nil: RequestDoer, RequestRetryBackoffStrategy; " +
 		"consider using the client constructor",
 )
 
 type SimpleClient struct {
-	Doer        request.Doer
-	BodyDecoder body.Decoder
-	Config      client.Config
+	RequestDoer                 request.Doer
+	ResponseBodyDecoder         body.Decoder
+	RequestRetryBackoffStrategy backoff.Strategy
+	MaxRequestRetries           uint
 
 	requestBuilder request.Builder
 }
 
-func NewSimpleClient(config client.Config) (*SimpleClient, error) {
+func NewSimpleClient(config client.Config) *SimpleClient {
 
-	var bodyDecoder body.Decoder
-	switch config.DecoderType {
-	// JSON is the default for convenience. More decoder types will be added
-	// here as necessary.
-	default:
-		bodyDecoder = json.NewDecoder()
+	simpleClient := SimpleClient{
+		RequestDoer:                 config.RequestDoer,
+		ResponseBodyDecoder:         config.ResponseBodyDecoder,
+		RequestRetryBackoffStrategy: config.RequestRetryBackoffStrategy,
+		MaxRequestRetries:           config.MaxRequestRetries,
 	}
 
-	backoffStrategy := config.BackoffStrategy
-	if backoffStrategy == nil {
-		backoffStrategy = backoff.NewStrategyConstant(0)
+	if simpleClient.RequestDoer == nil {
+		simpleClient.RequestDoer = new(stdHTTP.Client)
 	}
 
-	config.BackoffStrategy = backoffStrategy
+	if simpleClient.ResponseBodyDecoder == nil {
+		simpleClient.ResponseBodyDecoder = new(json.Decoder)
+	}
 
-	return &SimpleClient{
-		Doer:        new(stdHTTP.Client),
-		BodyDecoder: bodyDecoder,
-		Config:      config,
-	}, nil
+	if simpleClient.RequestRetryBackoffStrategy == nil {
+		simpleClient.RequestRetryBackoffStrategy = backoff.NewStrategyConstant(0)
+	}
+
+	return &simpleClient
 }
 
 func (c *SimpleClient) Do(req *stdHTTP.Request, respBodyTarget any) (resp *stdHTTP.Response, err error) {
@@ -70,7 +71,7 @@ func (c *SimpleClient) Do(req *stdHTTP.Request, respBodyTarget any) (resp *stdHT
 
 	// There will be no problem if the constructor is used, but there could be otherwise. Do this
 	// to avoid panics due to nil pointer references.
-	if c.Doer == nil || c.BodyDecoder == nil || c.Config.BackoffStrategy == nil {
+	if c.RequestDoer == nil || c.RequestRetryBackoffStrategy == nil {
 		return nil, ErrNilClientFields
 	}
 
@@ -80,14 +81,14 @@ func (c *SimpleClient) Do(req *stdHTTP.Request, respBodyTarget any) (resp *stdHT
 		backoffStrategy backoff.Strategy
 	)
 
-	backoffStrategy = c.Config.BackoffStrategy
+	backoffStrategy = c.RequestRetryBackoffStrategy
 	if backoffStrategy == nil {
 		backoffStrategy = backoff.NewStrategyConstant(0)
 	}
 
 	for {
 
-		if retries > c.Config.MaxRetries {
+		if retries > c.MaxRequestRetries {
 			return resp, err
 		}
 
@@ -101,7 +102,7 @@ func (c *SimpleClient) Do(req *stdHTTP.Request, respBodyTarget any) (resp *stdHT
 			return resp, err
 		}
 
-		resp, err = c.Doer.Do(req)
+		resp, err = c.RequestDoer.Do(req)
 		if err == nil {
 			break
 		}
@@ -113,11 +114,11 @@ func (c *SimpleClient) Do(req *stdHTTP.Request, respBodyTarget any) (resp *stdHT
 
 	defer resp.Body.Close()
 
-	if c.BodyDecoder == nil {
+	if c.ResponseBodyDecoder == nil {
 		return
 	}
 
-	if err = c.BodyDecoder.Decode(resp.Body, respBodyTarget); err != nil {
+	if err = c.ResponseBodyDecoder.Decode(resp.Body, respBodyTarget); err != nil {
 		return resp, fmt.Errorf("error decoding response: %w", err)
 	}
 
