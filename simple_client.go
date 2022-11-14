@@ -83,6 +83,13 @@ func (c *SimpleClient) Do(req *stdHTTP.Request, respBodyTarget any) (resp *stdHT
 		return nil, ErrNilClientFields
 	}
 
+	// If the context is done from the start, return an error. This avoids the case where the context
+	// is done from the start and the request is done anyway because the timer channel read is selected.
+	// This should make behavior more predictable.
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	var (
 		retries uint
 		// Don't wait at all before Doing the first request.
