@@ -47,7 +47,7 @@ func TestDecoder_Decode(t *testing.T) {
 	tests := []struct {
 		name           string
 		source         io.Reader
-		target         *SoundOfMusic
+		target         any
 		expTargetValue SoundOfMusic
 		expErrText     string
 	}{
@@ -58,7 +58,13 @@ func TestDecoder_Decode(t *testing.T) {
 		{
 			name:       "nil target",
 			source:     newSoundOfMusicReader(),
-			expErrText: "json: Unmarshal(nil *json_test.SoundOfMusic)",
+			expErrText: "json: Unmarshal(nil)",
+		},
+		{
+			name:       "non writable target",
+			source:     newSoundOfMusicReader(),
+			target:     SoundOfMusic{},
+			expErrText: "json: Unmarshal(non-pointer json_test.SoundOfMusic)",
 		},
 		{
 			name:   "okay",
@@ -95,7 +101,7 @@ func TestDecoder_Decode(t *testing.T) {
 				return
 			}
 
-			if tt.target.String() != tt.expTargetValue.String() {
+			if tt.target.(fmt.Stringer).String() != tt.expTargetValue.String() {
 				t.Errorf("wanted target %s, got %s", tt.expTargetValue, tt.target)
 			}
 		})
