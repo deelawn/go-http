@@ -30,6 +30,7 @@ type SimpleClient struct {
 	ResponseBodyDecoder         body.Decoder
 	RequestRetryBackoffStrategy backoff.Strategy
 	MaxRequestRetries           uint
+	ResponseBodyReadIndicator   body.ReadIndicator
 
 	requestBuilder request.Builder
 }
@@ -43,6 +44,7 @@ func NewSimpleClient(config client.Config) *SimpleClient {
 		ResponseBodyDecoder:         config.ResponseBodyDecoder,
 		RequestRetryBackoffStrategy: config.RequestRetryBackoffStrategy,
 		MaxRequestRetries:           config.MaxRequestRetries,
+		ResponseBodyReadIndicator:   config.ResponseBodyReadIndicator,
 	}
 
 	if simpleClient.RequestDoer == nil {
@@ -55,6 +57,10 @@ func NewSimpleClient(config client.Config) *SimpleClient {
 
 	if simpleClient.RequestRetryBackoffStrategy == nil {
 		simpleClient.RequestRetryBackoffStrategy = backoff.NewStrategyConstant(0)
+	}
+
+	if simpleClient.ResponseBodyReadIndicator == nil {
+		simpleClient.ResponseBodyReadIndicator = body.ReadIndicatorDefault
 	}
 
 	return &simpleClient
@@ -123,6 +129,12 @@ func (c *SimpleClient) Do(req *stdHTTP.Request, respBodyTarget any) (resp *stdHT
 		retries++
 		timer.Reset(c.RequestRetryBackoffStrategy.IntervalForRetry(retries))
 
+	}
+
+	// Do not parse nor read the response body nor close the reader if the custom
+	// function provided evaluates to false based on the response contents.
+	if !c.ResponseBodyReadIndicator(resp) {
+		return
 	}
 
 	defer resp.Body.Close()

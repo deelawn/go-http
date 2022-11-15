@@ -21,4 +21,7 @@ type Config struct {
 	RequestRetryBackoffStrategy backoff.Strategy
 	// MaxRequestRetries is the maximum number of times a request will be retried before returning an error.
 	MaxRequestRetries uint
+	// ResponseBodyReadIndicator is a function that, when it evaluates to true, will parse the HTTP
+	// response body and close the reader. If not specified, this will be function that always evaluates to true.
+	ResponseBodyReadIndicator body.ReadIndicator
 }
